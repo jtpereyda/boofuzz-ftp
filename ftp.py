@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Designed for use with boofuzz v0.0.1-dev3
 from boofuzz import *
 
 
