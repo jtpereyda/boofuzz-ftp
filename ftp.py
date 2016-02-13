@@ -36,11 +36,6 @@ def main():
     s_string("AAAA")
     s_static("\r\n")
 
-    #     user
-    #      |
-    #     pass
-    #    /    \
-    #  stor   retr
     session.connect(s_get("user"))
     session.connect(s_get("user"), s_get("pass"))
     session.connect(s_get("pass"), s_get("stor"))
