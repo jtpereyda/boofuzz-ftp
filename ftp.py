@@ -13,16 +13,16 @@ def main():
     session.add_target(target)
 
     s_initialize("user")
-    s_static("USER")
+    s_string("USER")
     s_delim(" ")
-    s_static("anonymous")
+    s_string("anonymous")
     s_static("\r\n")
 
     s_initialize("pass")
-    s_static("PASS")
+    s_string("PASS")
     s_delim(" ")
-    s_static("james")
-    s_string("\r\n")
+    s_string("james")
+    s_static("\r\n")
 
     s_initialize("stor")
     s_string("STOR")
