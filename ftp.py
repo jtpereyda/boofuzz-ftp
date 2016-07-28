@@ -4,13 +4,9 @@ from boofuzz import *
 
 
 def main():
-    logger = FuzzLogger(fuzz_loggers=[FuzzLoggerText()])
-    session = sessions.Session(sleep_time=0.0, fuzz_data_logger=logger)
-
-    my_connection = SocketConnection("127.0.0.1", 8021, proto='tcp')
-    target = sessions.Target(my_connection)
-
-    session.add_target(target)
+    session = sessions.Session(
+        target=sessions.Target(
+            connection=SocketConnection("192.168.56.101", 8021, proto='tcp')))
 
     s_initialize("user")
     s_string("USER")
