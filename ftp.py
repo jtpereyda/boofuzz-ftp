@@ -4,8 +4,8 @@ from boofuzz import *
 
 
 def main():
-    session = sessions.Session(
-        target=sessions.Target(
+    session = Session(
+        target=Target(
             connection=SocketConnection("127.0.0.1", 8021, proto='tcp')))
 
     s_initialize("user")
