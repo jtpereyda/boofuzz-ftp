@@ -6,7 +6,7 @@ from boofuzz import *
 def main():
     session = sessions.Session(
         target=sessions.Target(
-            connection=SocketConnection("192.168.56.101", 8021, proto='tcp')))
+            connection=SocketConnection("127.0.0.1", 8021, proto='tcp')))
 
     s_initialize("user")
     s_string("USER")
