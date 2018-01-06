@@ -12,21 +12,22 @@ def cli():
 @click.option('--target-port', type=int, default=21, help='Network port of target')
 @click.option('--username', help='FTP username')
 @click.option('--password', help='FTP password')
-def fuzz(target_host, target_port, username, password):
+@click.option('--test-case', help='Test case index', type=int)
+def fuzz(target_host, target_port, username, password, test_case):
     session = Session(
         target=Target(
             connection=SocketConnection(target_host, target_port, proto='tcp')))
 
     s_initialize("user")
-    s_string("boofuzz-user")
+    s_string("USER")
     s_delim(" ")
-    s_string("anonymous")
+    s_string(username.encode('ascii'))
     s_static("\r\n")
 
     s_initialize("pass")
-    s_string(password.encode('ascii'))
+    s_string("PASS")
     s_delim(" ")
-    s_string("james")
+    s_string(password.encode('ascii'))
     s_static("\r\n")
 
     s_initialize("stor")
@@ -45,8 +46,11 @@ def fuzz(target_host, target_port, username, password):
     session.connect(s_get("user"), s_get("pass"))
     session.connect(s_get("pass"), s_get("stor"))
     session.connect(s_get("pass"), s_get("retr"))
-	
-    session.fuzz()
+
+    if test_case is None:
+        session.fuzz()
+    else:
+        session.fuzz_single_case(mutant_index=test_case)
 
 cli.add_command(fuzz)
 
