@@ -18,15 +18,31 @@ def cli():
 @click.option('--test-case-name', help='Name of node or specific test case')
 @click.option('--csv-out', help='Output to CSV file')
 @click.option('--sleep-between-cases', help='Wait time between test cases (floating point)', type=float, default=0)
-def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases):
+@click.option('--procmon-host', help='Process monitor port host or IP')
+@click.option('--procmon-port', type=int, default=26002, help='Process monitor port')
+@click.option('--procmon-start', help='Process monitor start command')
+def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases,
+         procmon_host, procmon_port, procmon_start):
     fuzz_loggers = [FuzzLoggerText()]
     if csv_out is not None:
         f = open('ftp-fuzz.csv', 'wb')
         fuzz_loggers.append(FuzzLoggerCsv(file_handle=f))
 
+    if procmon_host is not None:
+        procmon = pedrpc.Client(procmon_host, procmon_port)
+    else:
+        procmon = None
+
+    procmon_options = {}
+    if procmon_start is not None:
+        procmon_options['start_commands'] = [procmon_start]
+
     session = Session(
         target=Target(
-            connection=SocketConnection(target_host, target_port, proto='tcp')),
+            connection=SocketConnection(target_host, target_port, proto='tcp'),
+            procmon=procmon,
+            procmon_options=procmon_options,
+        ),
         fuzz_data_logger=FuzzLogger(fuzz_loggers=fuzz_loggers),
         sleep_time=sleep_between_cases
     )
