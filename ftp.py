@@ -3,21 +3,45 @@
 from boofuzz import *
 import click
 
+
 @click.group()
 def cli():
     pass
 
+
 @click.command()
-@click.option('--target-host', help='Host or IP address of target')
-@click.option('--target-port', type=int, default=21, help='Network port of target')
-@click.option('--username', help='FTP username')
-@click.option('--password', help='FTP password')
-@click.option('--test-case', help='Test case index', type=int)
-def fuzz(target_host, target_port, username, password, test_case):
+@click.option('--target-host', help='Host or IP address of target', prompt=True)
+@click.option('--target-port', type=int, default=21, help='Network port of target', prompt=True)
+@click.option('--username', help='FTP username', prompt=True)
+@click.option('--password', help='FTP password', prompt=True)
+@click.option('--test-case-index', help='Test case index', type=int)
+@click.option('--test-case-name', help='Name of node or specific test case')
+@click.option('--csv-out', help='Output to CSV file')
+@click.option('--sleep-between-cases', help='Wait time between test cases (floating point)', type=float, default=0)
+def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases):
+    fuzz_loggers = [FuzzLoggerText()]
+    if csv_out is not None:
+        f = open('ftp-fuzz.csv', 'wb')
+        fuzz_loggers.append(FuzzLoggerCsv(file_handle=f))
+
     session = Session(
         target=Target(
-            connection=SocketConnection(target_host, target_port, proto='tcp')))
+            connection=SocketConnection(target_host, target_port, proto='tcp')),
+        fuzz_data_logger=FuzzLogger(fuzz_loggers=fuzz_loggers),
+        sleep_time=sleep_between_cases
+    )
 
+    initialize_ftp(session, username, password)
+
+    if test_case_index is not None:
+        session.fuzz_single_case(mutant_index=test_case_index)
+    elif test_case_name is not None:
+        session.fuzz_by_name(test_case_name)
+    else:
+        session.fuzz()
+
+
+def initialize_ftp(session, username, password):
     s_initialize("user")
     s_string("USER")
     s_delim(" ")
@@ -47,10 +71,6 @@ def fuzz(target_host, target_port, username, password, test_case):
     session.connect(s_get("pass"), s_get("stor"))
     session.connect(s_get("pass"), s_get("retr"))
 
-    if test_case is None:
-        session.fuzz()
-    else:
-        session.fuzz_single_case(mutant_index=test_case)
 
 cli.add_command(fuzz)
 
