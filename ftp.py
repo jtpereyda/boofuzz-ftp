@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 # Designed for use with boofuzz v0.0.1-dev3
+import logging
 import re
 import time
-from boofuzz import *
+
 import click
+from boofuzz import *
 
 
 @click.group()
@@ -25,8 +27,11 @@ def cli():
 @click.option('--procmon-start', help='Process monitor start command')
 @click.option('--skip', help='Skip n test cases (default 0)', type=int, default=0)
 @click.option('--quiet', help='Quieter output', is_flag=True)
+@click.option('--debug', help='Print debug info to console', is_flag=True)
 def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases,
-         procmon_host, procmon_port, procmon_start, skip, quiet):
+         procmon_host, procmon_port, procmon_start, skip, quiet, debug):
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
     fuzz_loggers = []
     if not quiet:
         fuzz_loggers.append(FuzzLoggerText())
