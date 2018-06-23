@@ -63,6 +63,49 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
     else:
         session.fuzz()
 
+    print('Test complete. Serving web page. Hit Ctrl+C to quit.')
+    while True:
+        time.sleep(.001)
+
+
+def ftp_check(target, fuzz_data_logger, session, sock, *args, **kwargs):
+    """
+    Overload or replace this routine to specify actions to run after to each fuzz request. The order of events is
+    as follows::
+
+        pre_send() - req - callback ... req - callback - post_send()
+
+    Potential uses:
+     * Closing down a connection.
+     * Checking for expected responses.
+
+    @see: pre_send()
+
+    Args:
+        target (Target): Target with sock-like interface.
+        fuzz_data_logger (ifuzz_logger.IFuzzLogger): Allows logging of test checks and passes/failures.
+            Provided with a test case and test step already opened.
+
+        session (Session): Session object calling post_send.
+            Useful properties include last_send and last_recv.
+
+        sock: DEPRECATED Included for backward-compatibility. Same as target.
+        args: Implementations should include \*args and \**kwargs for forward-compatibility.
+        kwargs: Implementations should include \*args and \**kwargs for forward-compatibility.
+    """
+    ftp_reply_regex = re.compile('[2345][0-9][0-9]')
+
+    target.close()
+    target.open()
+    target.send('USER {0}\r\n'.format('admin'))
+    user_reply = target.recv(10000)
+    fuzz_data_logger.log_check('Checking reply matches regex /{0}/'.format(ftp_reply_regex.pattern))
+    if re.match(ftp_reply_regex, user_reply):
+        fuzz_data_logger.log_pass('Match')
+    else:
+        fuzz_data_logger.log_fail('No match')
+
+
 
 def initialize_ftp(session, username, password):
     s_initialize("user")
@@ -89,10 +132,43 @@ def initialize_ftp(session, username, password):
     s_string("AAAA")
     s_static("\r\n")
 
+    s_initialize("appe")
+    s_string("APPE")
+    s_delim(" ")
+    s_string("AAAA")
+    s_static("\r\n")
+
+    s_initialize("allo-no-page-size")
+    s_string("ALLO")
+    s_delim(" ")
+    s_qword(7, output_format='ascii', name='num_bytes')
+    s_static("\r\n")
+
+    s_initialize("allo-with-page-size")
+    s_string("ALLO")
+    s_delim(" ")
+    s_qword(7, output_format='ascii', name='num_bytes')
+    s_delim(" R ")
+    s_qword(9, output_format='ascii', name='page_size')
+    s_static("\r\n")
+
     session.connect(s_get("user"))
     session.connect(s_get("user"), s_get("pass"))
+
+    session.connect(s_get("pass"), s_get("allo-no-page-size"))
+    session.connect(s_get("pass"), s_get("allo-with-page-size"))
+
     session.connect(s_get("pass"), s_get("stor"))
+    session.connect(s_get("allo-no-page-size"), s_get("stor"))
+    session.connect(s_get("allo-with-page-size"), s_get("stor"))
+
+    session.connect(s_get("pass"), s_get("appe"))
+    session.connect(s_get("allo-no-page-size"), s_get("appe"))
+    session.connect(s_get("allo-with-page-size"), s_get("appe"))
+
     session.connect(s_get("pass"), s_get("retr"))
+
+    session.post_send = ftp_check
 
 
 cli.add_command(fuzz)
