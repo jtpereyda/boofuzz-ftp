@@ -7,6 +7,8 @@ import time
 import click
 from boofuzz import *
 
+ftp_reply_regex = re.compile('[2345][0-9][0-9]')
+
 
 @click.group()
 def cli():
@@ -22,36 +24,46 @@ def cli():
 @click.option('--test-case-name', help='Name of node or specific test case')
 @click.option('--csv-out', help='Output to CSV file')
 @click.option('--sleep-between-cases', help='Wait time between test cases (floating point)', type=float, default=0)
-@click.option('--procmon-host', help='Process monitor port host or IP')
+@click.option('--procmon', help='Enable procmon (process monitor) on same host as --target-host', is_flag=True)
+@click.option('--procmon-host', help='Enable procmon (process monitor) on specified host or IP')
 @click.option('--procmon-port', type=int, default=26002, help='Process monitor port')
-@click.option('--procmon-start', help='Process monitor start command')
+@click.option('--procmon-start',
+              help='Process monitor start command (may be used repeatedly to specify multiple commands', multiple=True)
+@click.option('--procmon-stop',
+              help='Process monitor stop command (may be used repeatedly to specify multiple commands', multiple=True)
 @click.option('--skip', help='Skip n test cases (default 0)', type=int, default=0)
 @click.option('--quiet', help='Quieter output', is_flag=True)
 @click.option('--debug', help='Print debug info to console', is_flag=True)
+@click.option('--feature-check', help='Check supported protocol features instead of fuzzing', is_flag=True)
 def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases,
-         procmon_host, procmon_port, procmon_start, skip, quiet, debug):
+         procmon, procmon_host, procmon_port, procmon_start, procmon_stop, skip, quiet, debug, feature_check):
     if debug:
         logging.basicConfig(level=logging.DEBUG)
     fuzz_loggers = []
+
     if not quiet:
         fuzz_loggers.append(FuzzLoggerText())
+
     if csv_out is not None:
         f = open('ftp-fuzz.csv', 'wb')
         fuzz_loggers.append(FuzzLoggerCsv(file_handle=f))
 
-    if procmon_host is not None:
-        procmon = pedrpc.Client(procmon_host, procmon_port)
-    else:
-        procmon = None
+    if procmon or procmon_host is not None:
+        if procmon_host is None:
+            procmon_host = target_host
 
-    procmon_options = {}
-    if procmon_start is not None:
-        procmon_options['start_commands'] = [procmon_start]
+        procmon_ref = pedrpc.Client(procmon_host, procmon_port)
+
+        procmon_options = {'start_commands': procmon_start,
+                           'stop_commands': procmon_stop, }
+    else:
+        procmon_ref = None
+        procmon_options = None
 
     session = Session(
         target=Target(
             connection=SocketConnection(target_host, target_port, proto='tcp'),
-            procmon=procmon,
+            procmon=procmon_ref,
             procmon_options=procmon_options,
         ),
         fuzz_loggers=fuzz_loggers,
@@ -61,12 +73,15 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
 
     initialize_ftp(session, username, password)
 
-    if test_case_index is not None:
-        session.fuzz_single_case(mutant_index=test_case_index)
-    elif test_case_name is not None:
-        session.fuzz_by_name(test_case_name)
+    if feature_check:
+        session.feature_check()
     else:
-        session.fuzz()
+        if test_case_index is not None:
+            session.fuzz_single_case(mutant_index=test_case_index)
+        elif test_case_name is not None:
+            session.fuzz_by_name(test_case_name)
+        else:
+            session.fuzz()
 
     print('Test complete. Serving web page. Hit Ctrl+C to quit.')
     while True:
@@ -98,18 +113,24 @@ def ftp_check(target, fuzz_data_logger, session, sock, *args, **kwargs):
         args: Implementations should include \*args and \**kwargs for forward-compatibility.
         kwargs: Implementations should include \*args and \**kwargs for forward-compatibility.
     """
-    ftp_reply_regex = re.compile('[2345][0-9][0-9]')
-
     target.close()
     target.open()
     target.send('USER {0}\r\n'.format('admin'))
-    user_reply = target.recv(10000)
+    reply = target.recv(10000)
     fuzz_data_logger.log_check('Checking reply matches regex /{0}/'.format(ftp_reply_regex.pattern))
-    if re.match(ftp_reply_regex, user_reply):
+    if re.match(ftp_reply_regex, reply):
         fuzz_data_logger.log_pass('Match')
     else:
         fuzz_data_logger.log_fail('No match')
 
+
+def recv_banner(target, fuzz_data_logger, session, *args, **kwargs):
+    banner = target.recv(10000)
+    fuzz_data_logger.log_check('Checking banner matches regex /{0}/'.format(ftp_reply_regex.pattern))
+    if re.match(ftp_reply_regex, banner):
+        fuzz_data_logger.log_pass('Match')
+    else:
+        fuzz_data_logger.log_fail('No match')
 
 
 def initialize_ftp(session, username, password):
@@ -157,7 +178,7 @@ def initialize_ftp(session, username, password):
     s_qword(9, output_format='ascii', name='page_size')
     s_static("\r\n")
 
-    session.connect(s_get("user"))
+    session.connect(s_get("user"), callback=recv_banner)
     session.connect(s_get("user"), s_get("pass"))
 
     session.connect(s_get("pass"), s_get("allo-no-page-size"))
