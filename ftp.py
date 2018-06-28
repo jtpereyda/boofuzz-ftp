@@ -32,11 +32,12 @@ def cli():
 @click.option('--procmon-stop',
               help='Process monitor stop command (may be used repeatedly to specify multiple commands', multiple=True)
 @click.option('--skip', help='Skip n test cases (default 0)', type=int, default=0)
-@click.option('--quiet', help='Quieter output', is_flag=True)
+@click.option('--quiet', '-q', help='Quieter output', is_flag=True)
 @click.option('--debug', help='Print debug info to console', is_flag=True)
 @click.option('--feature-check', help='Check supported protocol features instead of fuzzing', is_flag=True)
+@click.option('--fail-on-no-reply/--pass-on-no-reply', help='Treat no reply as failure. Disabled by default.', default=False)
 def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases,
-         procmon, procmon_host, procmon_port, procmon_start, procmon_stop, skip, quiet, debug, feature_check):
+         procmon, procmon_host, procmon_port, procmon_start, procmon_stop, skip, quiet, debug, feature_check, fail_on_no_reply):
     if debug:
         logging.basicConfig(level=logging.DEBUG)
     fuzz_loggers = []
@@ -69,6 +70,7 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
         fuzz_loggers=fuzz_loggers,
         sleep_time=sleep_between_cases,
         skip=skip,
+        check_data_received_each_request=fail_on_no_reply,
     )
 
     initialize_ftp(session, username, password)
@@ -119,6 +121,8 @@ def ftp_check(target, fuzz_data_logger, session, sock, *args, **kwargs):
     reply = target.recv(10000)
     fuzz_data_logger.log_check('Checking reply matches regex /{0}/'.format(ftp_reply_regex.pattern))
     if re.match(ftp_reply_regex, reply):
+        # TODO This tends to match the banner received instead of the USER reply.
+        # Solution: Utilize the Session's feature_check functionality instead of manually reproducing here
         fuzz_data_logger.log_pass('Match')
     else:
         fuzz_data_logger.log_fail('No match')
