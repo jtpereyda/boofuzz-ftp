@@ -15,7 +15,7 @@ def cli():
     pass
 
 
-@click.command()
+@cli.command()
 @click.option('--target-host', help='Host or IP address of target', prompt=True)
 @click.option('--target-port', type=int, default=21, help='Network port of target (default 21)')
 @click.option('--username', help='FTP username', prompt=True)
@@ -36,8 +36,11 @@ def cli():
 @click.option('--debug', help='Print debug info to console', is_flag=True)
 @click.option('--feature-check', help='Check supported protocol features instead of fuzzing', is_flag=True)
 @click.option('--fail-on-no-reply/--pass-on-no-reply', help='Treat no reply as failure. Disabled by default.', default=False)
+@click.option('--web-console-port', help='Port for local web console', type=int, default=26000)
+@click.option('--target-recv-timeout', help='Timeout for recv from target', type=float, default=5)
 def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases,
-         procmon, procmon_host, procmon_port, procmon_start, procmon_stop, skip, quiet, debug, feature_check, fail_on_no_reply):
+         procmon, procmon_host, procmon_port, procmon_start, procmon_stop, skip, quiet, debug, feature_check,
+         fail_on_no_reply, web_console_port, target_recv_timeout):
     if debug:
         logging.basicConfig(level=logging.DEBUG)
     fuzz_loggers = []
@@ -63,7 +66,7 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
 
     session = Session(
         target=Target(
-            connection=SocketConnection(target_host, target_port, proto='tcp'),
+            connection=SocketConnection(target_host, target_port, proto='tcp', recv_timeout=target_recv_timeout),
             procmon=procmon_ref,
             procmon_options=procmon_options,
         ),
@@ -71,6 +74,7 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
         sleep_time=sleep_between_cases,
         skip=skip,
         check_data_received_each_request=fail_on_no_reply,
+        web_port=web_console_port,
     )
 
     initialize_ftp(session, username, password)
@@ -86,6 +90,23 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
             session.fuzz()
 
     print('Test complete. Serving web page. Hit Ctrl+C to quit.')
+    while True:
+        time.sleep(.001)
+
+
+@cli.command()
+@click.option('--debug', help='Print debug info to console', is_flag=True)
+@click.option('--web-app-port', help='Port on which to serve web app', type=int)
+@click.argument('filename')
+def open(debug, filename, web_app_port):
+    if debug:
+        logging.basicConfig(level=logging.DEBUG)
+
+    # initialize_ftp(session, username, password)
+
+    open_test_run(db_filename=filename, port=web_app_port)
+
+    print('Serving web page. Hit Ctrl+C to quit.')
     while True:
         time.sleep(.001)
 
@@ -201,7 +222,6 @@ def initialize_ftp(session, username, password):
     session.post_send = ftp_check
 
 
-cli.add_command(fuzz)
 
 if __name__ == "__main__":
     cli()
