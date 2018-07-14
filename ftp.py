@@ -31,7 +31,8 @@ def cli():
               help='Process monitor start command (may be used repeatedly to specify multiple commands', multiple=True)
 @click.option('--procmon-stop',
               help='Process monitor stop command (may be used repeatedly to specify multiple commands', multiple=True)
-@click.option('--skip', help='Skip n test cases (default 0)', type=int, default=0)
+@click.option('--index-start', help='Start at test case index (default 1)', type=int, default=1)
+@click.option('--index-end', help='Stop at test case index (default None)', type=int, default=None)
 @click.option('--quiet', '-q', help='Quieter output', is_flag=True)
 @click.option('--debug', help='Print debug info to console', is_flag=True)
 @click.option('--feature-check', help='Check supported protocol features instead of fuzzing', is_flag=True)
@@ -39,8 +40,8 @@ def cli():
 @click.option('--web-console-port', help='Port for local web console', type=int, default=26000)
 @click.option('--target-recv-timeout', help='Timeout for recv from target', type=float, default=5)
 def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases,
-         procmon, procmon_host, procmon_port, procmon_start, procmon_stop, skip, quiet, debug, feature_check,
-         fail_on_no_reply, web_console_port, target_recv_timeout):
+         procmon, procmon_host, procmon_port, procmon_start, procmon_stop, index_start, index_end, quiet, debug,
+         feature_check, fail_on_no_reply, web_console_port, target_recv_timeout):
     if debug:
         logging.basicConfig(level=logging.DEBUG)
     fuzz_loggers = []
@@ -72,7 +73,8 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
         ),
         fuzz_loggers=fuzz_loggers,
         sleep_time=sleep_between_cases,
-        skip=skip,
+        index_start=index_start,
+        index_end=index_end,
         check_data_received_each_request=fail_on_no_reply,
         web_port=web_console_port,
     )
