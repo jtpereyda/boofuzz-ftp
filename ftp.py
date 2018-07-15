@@ -59,6 +59,9 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
 
         procmon_ref = pedrpc.Client(procmon_host, procmon_port)
 
+        for i, cmd in enumerate(procmon_start):
+            procmon_start[i] = shlex.split(cmd)  # split command line args
+
         procmon_options = {'start_commands': procmon_start,
                            'stop_commands': procmon_stop, }
     else:
