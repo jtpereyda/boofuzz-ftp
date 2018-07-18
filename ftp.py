@@ -143,10 +143,11 @@ def ftp_check(target, fuzz_data_logger, session, sock, *args, **kwargs):
     """
     target.close()
     target.open()
+    recv_banner(target=target, fuzz_data_logger=fuzz_data_logger, session=session)
     target.send('USER {0}\r\n'.format('admin'))
     reply = target.recv(10000)
     fuzz_data_logger.log_check('Checking reply matches regex /{0}/'.format(ftp_reply_regex.pattern))
-    if re.match(ftp_reply_regex, reply):
+    if re.search(ftp_reply_regex, reply):
         # TODO This tends to match the banner received instead of the USER reply.
         # Solution: Utilize the Session's feature_check functionality instead of manually reproducing here
         fuzz_data_logger.log_pass('Match')
@@ -157,7 +158,7 @@ def ftp_check(target, fuzz_data_logger, session, sock, *args, **kwargs):
 def recv_banner(target, fuzz_data_logger, session, *args, **kwargs):
     banner = target.recv(10000)
     fuzz_data_logger.log_check('Checking banner matches regex /{0}/'.format(ftp_reply_regex.pattern))
-    if re.match(ftp_reply_regex, banner):
+    if re.search(ftp_reply_regex, banner):
         fuzz_data_logger.log_pass('Match')
     else:
         fuzz_data_logger.log_fail('No match')
