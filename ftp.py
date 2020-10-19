@@ -39,12 +39,12 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
 
     session = Session(
         target=Target(
-            connection=SocketConnection(target_host, target_port, proto='tcp'),
+            connection=TCPSocketConnection(target_host, target_port),
             procmon=procmon,
             procmon_options=procmon_options,
         ),
-        fuzz_data_logger=FuzzLogger(fuzz_loggers=fuzz_loggers),
-        sleep_time=sleep_between_cases
+        fuzz_loggers=fuzz_loggers,
+        sleep_time=sleep_between_cases,
     )
 
     initialize_ftp(session, username, password)
