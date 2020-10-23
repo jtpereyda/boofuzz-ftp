@@ -1,7 +1,28 @@
 #!/usr/bin/env python
 # Designed for use with boofuzz v0.0.1-dev3
 from boofuzz import *
+from boofuzz.constants import DEFAULT_PROCMON_PORT
+from boofuzz.utils.debugger_thread_simple import DebuggerThreadSimple
+from boofuzz.utils.process_monitor_pedrpc_server import ProcessMonitorPedrpcServer
 import click
+from multiprocessing import Process
+
+
+def serve_procmon(port, crash_bin, proc_name, ignore_pid, log_level):
+    try:
+        with ProcessMonitorPedrpcServer(
+            host="0.0.0.0",
+            port=port,
+            crash_filename=crash_bin,
+            debugger_class=DebuggerThreadSimple,
+            proc_name=proc_name,
+            pid_to_ignore=ignore_pid,
+            level=log_level,
+            coredump_dir="boofuzz-results",
+        ) as servlet:
+            servlet.serve_forever()
+    except KeyboardInterrupt:
+        return
 
 
 @click.group()
@@ -21,30 +42,49 @@ def cli():
 @click.option('--procmon-host', help='Process monitor port host or IP')
 @click.option('--procmon-port', type=int, default=26002, help='Process monitor port')
 @click.option('--procmon-start', help='Process monitor start command')
-def fuzz(target_host, target_port, username, password, test_case_index, test_case_name, csv_out, sleep_between_cases,
-         procmon_host, procmon_port, procmon_start):
-    fuzz_loggers = [FuzzLoggerText()]
+@click.option('--tui/--no-tui', help='Enable/disable TUI')
+@click.argument('target_cmdline', nargs=-1, type=click.UNPROCESSED)
+def fuzz(target_cmdline, target_host, target_port, username, password, test_case_index, test_case_name, csv_out,
+         sleep_between_cases,
+         procmon_host, procmon_port, procmon_start, tui):
+    local_procmon = None
+    if len(target_cmdline) > 0 and procmon_host is None:
+        local_procmon = Process(target=serve_procmon,
+                                kwargs={"port": 26002, "crash_bin": "boofuzz-crash-bin",
+                                        "proc_name": None,  # "proftpd",
+                                        "ignore_pid": None,
+                                        "log_level": 1})
+        local_procmon.start()
+        procmon_host = "127.0.0.1"
+    # serve_procmon(port=26002, crash_bin="boofuzz-crash-bin", proc_name="proftpd", ignore_pid=None, log_level=1)
+
+    fuzz_loggers = []
+    if tui:
+        fuzz_loggers.append(FuzzLoggerText())
     if csv_out is not None:
         f = open('ftp-fuzz.csv', 'wb')
         fuzz_loggers.append(FuzzLoggerCsv(file_handle=f))
 
-    if procmon_host is not None:
-        procmon = pedrpc.Client(procmon_host, procmon_port)
-    else:
-        procmon = None
-
     procmon_options = {}
     if procmon_start is not None:
         procmon_options['start_commands'] = [procmon_start]
+    if target_cmdline is not None:
+        procmon_options['start_commands'] = [list(target_cmdline)]
+
+    if procmon_host is not None or len(target_cmdline) > 0:
+        procmon = ProcessMonitor(procmon_host, procmon_port)
+    else:
+        procmon = None
 
     session = Session(
         target=Target(
-            connection=SocketConnection(target_host, target_port, proto='tcp'),
+            connection=TCPSocketConnection(target_host, target_port),
+            # monitors=monitors,
             procmon=procmon,
             procmon_options=procmon_options,
         ),
         fuzz_loggers=fuzz_loggers,
-        sleep_time=sleep_between_cases
+        sleep_time=sleep_between_cases,
     )
 
     initialize_ftp(session, username, password)
@@ -55,6 +95,9 @@ def fuzz(target_host, target_port, username, password, test_case_index, test_cas
         session.fuzz_by_name(test_case_name)
     else:
         session.fuzz()
+
+    if local_procmon is not None:
+        local_procmon.kill()
 
 
 def initialize_ftp(session, username, password):
