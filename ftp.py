@@ -72,16 +72,22 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
         procmon_options['start_commands'] = [list(target_cmdline)]
 
     if procmon_host is not None or len(target_cmdline) > 0:
+        if procmon_host is None:
+            procmon_host = "127.0.0.1"
         procmon = ProcessMonitor(procmon_host, procmon_port)
+        procmon.set_options(**procmon_options)
+        monitors=[procmon]
     else:
         procmon = None
+        monitors = []
+
 
     session = Session(
         target=Target(
             connection=TCPSocketConnection(target_host, target_port),
-            # monitors=monitors,
-            procmon=procmon,
-            procmon_options=procmon_options,
+            monitors=monitors,
+            # procmon=procmon,
+            # procmon_options=procmon_options,
         ),
         fuzz_loggers=fuzz_loggers,
         sleep_time=sleep_between_cases,
