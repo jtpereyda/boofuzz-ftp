@@ -60,7 +60,7 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
 
     fuzz_loggers = []
     if tui:
-        fuzz_loggers.append(FuzzLoggerText())
+        fuzz_loggers.append(FuzzLoggerCurses())
     if csv_out is not None:
         f = open('ftp-fuzz.csv', 'wb')
         fuzz_loggers.append(FuzzLoggerCsv(file_handle=f))
