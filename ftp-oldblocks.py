@@ -81,7 +81,6 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
         procmon = None
         monitors = []
 
-
     session = Session(
         target=Target(
             connection=TCPSocketConnection(target_host, target_port),
@@ -107,47 +106,34 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
 
 
 def initialize_ftp(session, username, password):
-    user = Request(
-        'user',
-        children=(
-            String(name='key', default_value='USER'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value=username.encode('ascii')),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
-    password = Request(
-        'pass',
-        children=(
-            String(name='key', default_value='PASS'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value=password.encode('ascii')),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
-    stor = Request(
-        "stor",
-        children=(
-            String(name='key', default_value='STOR'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value='AAAA'),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
-    retr = Request(
-        "retr",
-        children=(
-            String(name='key', default_value='RETR'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value='AAAA'),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
+    s_initialize("user")
+    s_string("USER", name="USER-cmd")
+    s_delim(" ", name="USER-delim")
+    s_string(username.encode('ascii'), name="USER-val")
+    s_static("\r\n")
 
-    session.connect(user)
-    session.connect(user, password)
-    session.connect(password, stor)
-    session.connect(password, retr)
+    s_initialize("pass")
+    s_string("PASS", name="PASS-cmdval")
+    s_delim(" ", name="PASS-delim")
+    s_string(password.encode('ascii'), name="PASS-val")
+    s_static("\r\n")
+
+    s_initialize("stor")
+    s_string("STOR", name="STOR-cmd")
+    s_delim(" ", name="STOR-delim")
+    s_string("AAAA", name="STOR-val")
+    s_static("\r\n")
+
+    s_initialize("retr")
+    s_string("RETR", name="RETR-cmd")
+    s_delim(" ", name="RETR-delim")
+    s_string("AAAA", name="RETR-val")
+    s_static("\r\n")
+
+    session.connect(s_get("user"))
+    session.connect(s_get("user"), s_get("pass"))
+    session.connect(s_get("pass"), s_get("stor"))
+    session.connect(s_get("pass"), s_get("retr"))
 
 
 cli.add_command(fuzz)
