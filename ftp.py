@@ -107,47 +107,61 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
 
 
 def initialize_ftp(session, username, password):
-    user = Request(
-        'user',
-        children=(
-            String(name='key', default_value='USER'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value=username.encode('ascii')),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
-    password = Request(
-        'pass',
-        children=(
-            String(name='key', default_value='PASS'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value=password.encode('ascii')),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
-    stor = Request(
-        "stor",
-        children=(
-            String(name='key', default_value='STOR'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value='AAAA'),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
-    retr = Request(
-        "retr",
-        children=(
-            String(name='key', default_value='RETR'),
-            Delim(name='sep', default_value=' '),
-            String(name='value', default_value='AAAA'),
-            Static(name='end', default_value='\r\n'),
-        ),
-    )
+    """
+    RFC 5797:
+
+
+    2.4.  Base FTP Commands
+
+       The following commands are part of the base FTP specification
+       [RFC0959] and are listed in the registry with the immutable pseudo
+       FEAT code "base".
+
+	  Mandatory commands:
+
+	  ABOR, ACCT, ALLO, APPE, CWD, DELE, HELP, LIST, MODE, NLST, NOOP,
+	  PASS, PASV, PORT, QUIT, REIN, REST, RETR, RNFR, RNTO, SITE, STAT,
+	  STOR, STRU, TYPE, USER
+
+    """
+    user = _ftp_cmd_1_arg(cmd_code="USER", default_value=username.encode('ascii'))
+    password = _ftp_cmd_1_arg(cmd_code="PASS", default_value=password.encode('ascii'))
+    stor = _ftp_cmd_1_arg(cmd_code="STOR", default_value="AAAA")
+    retr = _ftp_cmd_1_arg(cmd_code="RETR", default_value="AAAA")
+    mkd = _ftp_cmd_1_arg(cmd_code="MKD", default_value="AAAA")
+    abor = _ftp_cmd_0_arg(cmd_code="ABOR")
 
     session.connect(user)
     session.connect(user, password)
     session.connect(password, stor)
     session.connect(password, retr)
+    session.connect(password, mkd)
+    session.connect(password, abor)
+    session.connect(stor, abor)
+    session.connect(retr, abor)
+    session.connect(mkd, abor)
+
+
+def _ftp_cmd_0_arg(cmd_code):
+    return Request(
+        cmd_code.lower(),
+        children=(
+            String(name='key', default_value=cmd_code),
+            Static(name='end', default_value='\r\n'),
+        ),
+    )
+
+def _ftp_cmd_1_arg(cmd_code, default_value):
+    return Request(
+        cmd_code.lower(),
+        children=(
+            String(name='key', default_value=cmd_code),
+            Delim(name='sep', default_value=' '),
+            String(name='value', default_value=default_value),
+            Static(name='end', default_value='\r\n'),
+        ),
+    )
+
 
 
 cli.add_command(fuzz)
