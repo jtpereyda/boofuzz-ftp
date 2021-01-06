@@ -3,26 +3,8 @@
 from boofuzz import *
 from boofuzz.constants import DEFAULT_PROCMON_PORT
 from boofuzz.utils.debugger_thread_simple import DebuggerThreadSimple
-from boofuzz.utils.process_monitor_pedrpc_server import ProcessMonitorPedrpcServer
+from boofuzz.utils.process_monitor_local import ProcessMonitorLocal
 import click
-from multiprocessing import Process
-
-
-def serve_procmon(port, crash_bin, proc_name, ignore_pid, log_level):
-    try:
-        with ProcessMonitorPedrpcServer(
-            host="0.0.0.0",
-            port=port,
-            crash_filename=crash_bin,
-            debugger_class=DebuggerThreadSimple,
-            proc_name=proc_name,
-            pid_to_ignore=ignore_pid,
-            level=log_level,
-            coredump_dir="boofuzz-results",
-        ) as servlet:
-            servlet.serve_forever()
-    except KeyboardInterrupt:
-        return
 
 
 @click.group()
@@ -40,26 +22,26 @@ def cli():
 @click.option('--csv-out', help='Output to CSV file')
 @click.option('--sleep-between-cases', help='Wait time between test cases (floating point)', type=float, default=0)
 @click.option('--procmon-host', help='Process monitor port host or IP')
-@click.option('--procmon-port', type=int, default=26002, help='Process monitor port')
+@click.option('--procmon-port', type=int, default=DEFAULT_PROCMON_PORT, help='Process monitor port')
 @click.option('--procmon-start', help='Process monitor start command')
 @click.option('--tui/--no-tui', help='Enable/disable TUI')
+@click.option('--text-dump/--no-text-dump', help='Enable/disable full text dump of logs', default=False)
 @click.argument('target_cmdline', nargs=-1, type=click.UNPROCESSED)
 def fuzz(target_cmdline, target_host, target_port, username, password, test_case_index, test_case_name, csv_out,
          sleep_between_cases,
-         procmon_host, procmon_port, procmon_start, tui):
+         procmon_host, procmon_port, procmon_start, tui, text_dump):
     local_procmon = None
     if len(target_cmdline) > 0 and procmon_host is None:
-        local_procmon = Process(target=serve_procmon,
-                                kwargs={"port": 26002, "crash_bin": "boofuzz-crash-bin",
-                                        "proc_name": None,  # "proftpd",
-                                        "ignore_pid": None,
-                                        "log_level": 1})
-        local_procmon.start()
-        procmon_host = "127.0.0.1"
-    # serve_procmon(port=26002, crash_bin="boofuzz-crash-bin", proc_name="proftpd", ignore_pid=None, log_level=1)
+        local_procmon = ProcessMonitorLocal(crash_filename="boofuzz-crash-bin",
+                                            proc_name=None,  # "proftpd",
+                                            pid_to_ignore=None,
+                                            debugger_class=DebuggerThreadSimple,
+                                            level=1)
 
     fuzz_loggers = []
-    if tui:
+    if text_dump:
+        fuzz_loggers.append(FuzzLoggerText())
+    elif tui:
         fuzz_loggers.append(FuzzLoggerCurses())
     if csv_out is not None:
         f = open('ftp-fuzz.csv', 'wb')
@@ -71,16 +53,15 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
     if target_cmdline is not None:
         procmon_options['start_commands'] = [list(target_cmdline)]
 
-    if procmon_host is not None or len(target_cmdline) > 0:
-        if procmon_host is None:
-            procmon_host = "127.0.0.1"
-        procmon = ProcessMonitor(procmon_host, procmon_port)
+    if local_procmon is not None or procmon_host is not None:
+        if procmon_host is not None:
+            procmon = ProcessMonitor(procmon_host, procmon_port)
+        else:
+            procmon = local_procmon
         procmon.set_options(**procmon_options)
-        monitors=[procmon]
+        monitors = [procmon]
     else:
-        procmon = None
         monitors = []
-
 
     session = Session(
         target=Target(
@@ -102,8 +83,7 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
     else:
         session.fuzz()
 
-    if local_procmon is not None:
-        local_procmon.kill()
+    procmon.stop_target()
 
 
 def initialize_ftp(session, username, password):
@@ -151,6 +131,7 @@ def _ftp_cmd_0_arg(cmd_code):
         ),
     )
 
+
 def _ftp_cmd_1_arg(cmd_code, default_value):
     return Request(
         cmd_code.lower(),
@@ -161,7 +142,6 @@ def _ftp_cmd_1_arg(cmd_code, default_value):
             Static(name='end', default_value='\r\n'),
         ),
     )
-
 
 
 cli.add_command(fuzz)
