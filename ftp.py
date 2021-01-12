@@ -61,6 +61,7 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
         procmon.set_options(**procmon_options)
         monitors = [procmon]
     else:
+        procmon = None
         monitors = []
 
     session = Session(
