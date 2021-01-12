@@ -83,7 +83,8 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
     else:
         session.fuzz()
 
-    procmon.stop_target()
+    if procmon is not None:
+        procmon.stop_target()
 
 
 def initialize_ftp(session, username, password):
