@@ -14,7 +14,7 @@ def cli():
 
 @click.command()
 @click.option('--target-host', help='Host or IP address of target', prompt=True)
-@click.option('--target-port', type=int, default=21, help='Network port of target', prompt=True)
+@click.option('--target-port', type=int, default=21, help='Network port of target')
 @click.option('--username', help='FTP username', prompt=True)
 @click.option('--password', help='FTP password', prompt=True)
 @click.option('--test-case-index', help='Test case index', type=int)
