@@ -89,10 +89,11 @@ def cli():
 @click.option('--procmon-start', help='Process monitor start command')
 @click.option('--tui/--no-tui', help='Enable/disable TUI')
 @click.option('--text-dump/--no-text-dump', help='Enable/disable full text dump of logs', default=False)
+@click.option('--feature-check', is_flag=True, help='Run a feature check instead of a fuzz test', default=False)
 @click.argument('target_cmdline', nargs=-1, type=click.UNPROCESSED)
 def fuzz(target_cmdline, target_host, target_port, username, password, test_case_index, test_case_name, csv_out,
          sleep_between_cases,
-         procmon_host, procmon_port, procmon_start, tui, text_dump):
+         procmon_host, procmon_port, procmon_start, tui, text_dump, feature_check):
     local_procmon = None
     if len(target_cmdline) > 0 and procmon_host is None:
         local_procmon = ProcessMonitorLocal(crash_filename="boofuzz-crash-bin",
@@ -140,7 +141,9 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
 
     initialize_ftp(session, username, password)
 
-    if test_case_index is not None:
+    if feature_check:
+        session.feature_check()
+    elif test_case_index is not None:
         session.fuzz_single_case(mutant_index=test_case_index)
     elif test_case_name is not None:
         session.fuzz_by_name(test_case_name)
