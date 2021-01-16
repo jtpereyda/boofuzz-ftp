@@ -87,13 +87,14 @@ def cli():
 @click.option('--procmon-host', help='Process monitor port host or IP')
 @click.option('--procmon-port', type=int, default=DEFAULT_PROCMON_PORT, help='Process monitor port')
 @click.option('--procmon-start', help='Process monitor start command')
+@click.option('--procmon-capture', is_flag=True, help='Capture stdout/stderr from target process upon failure')
 @click.option('--tui/--no-tui', help='Enable/disable TUI')
 @click.option('--text-dump/--no-text-dump', help='Enable/disable full text dump of logs', default=False)
 @click.option('--feature-check', is_flag=True, help='Run a feature check instead of a fuzz test', default=False)
 @click.argument('target_cmdline', nargs=-1, type=click.UNPROCESSED)
-def fuzz(target_cmdline, target_host, target_port, username, password, test_case_index, test_case_name, csv_out,
-         sleep_between_cases,
-         procmon_host, procmon_port, procmon_start, tui, text_dump, feature_check):
+def fuzz(target_cmdline, target_host, target_port, username, password,
+         test_case_index, test_case_name, csv_out, sleep_between_cases,
+         procmon_host, procmon_port, procmon_start, procmon_capture, tui, text_dump, feature_check):
     local_procmon = None
     if len(target_cmdline) > 0 and procmon_host is None:
         local_procmon = ProcessMonitorLocal(crash_filename="boofuzz-crash-bin",
@@ -116,6 +117,8 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
         procmon_options['start_commands'] = [procmon_start]
     if target_cmdline is not None:
         procmon_options['start_commands'] = [list(target_cmdline)]
+    if procmon_capture:
+        procmon_options['capture_output'] = True
 
     if local_procmon is not None or procmon_host is not None:
         if procmon_host is not None:
@@ -128,23 +131,43 @@ def fuzz(target_cmdline, target_host, target_port, username, password, test_case
         procmon = None
         monitors = []
 
+    start = None
+    end = None
+    fuzz_only_one_case = None
+    if test_case_index is None:
+        start = 1
+    elif "-" in test_case_index:
+        start, end = test_case_index.split("-")
+        if not start:
+            start = 1
+        else:
+            start = int(start)
+        if not end:
+            end = None
+        else:
+            end = int(end)
+    else:
+        fuzz_only_one_case = int(test_case_index)
+
+    connection = TCPSocketConnection(target_host, target_port)
+
     session = Session(
         target=Target(
-            connection=TCPSocketConnection(target_host, target_port),
+            connection=connection,
             monitors=monitors,
-            # procmon=procmon,
-            # procmon_options=procmon_options,
         ),
         fuzz_loggers=fuzz_loggers,
         sleep_time=sleep_between_cases,
+        index_start=start,
+        index_end=end,
     )
 
     initialize_ftp(session, username, password)
 
     if feature_check:
         session.feature_check()
-    elif test_case_index is not None:
-        session.fuzz_single_case(mutant_index=test_case_index)
+    elif fuzz_only_one_case is not None:
+        session.fuzz_single_case(mutant_index=fuzz_only_one_case)
     elif test_case_name is not None:
         session.fuzz_by_name(test_case_name)
     else:
