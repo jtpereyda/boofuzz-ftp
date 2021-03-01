@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Designed for use with boofuzz v0.0.1-dev3
+# Designed for use with boofuzz v0.3.0 branch cli-main
 import re
 
 from boofuzz import *
@@ -136,5 +136,4 @@ def _ftp_cmd_1_arg(cmd_code, default_value):
 
 
 if __name__ == "__main__":
-    # TODO modify default port if we want to
     boofuzz.main_helper(click_command=ftp)

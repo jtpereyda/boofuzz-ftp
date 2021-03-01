@@ -188,11 +188,11 @@ def initialize_ftp(session, username, password):
        [RFC0959] and are listed in the registry with the immutable pseudo
        FEAT code "base".
 
-	  Mandatory commands:
+      Mandatory commands:
 
-	  ABOR, ACCT, ALLO, APPE, CWD, DELE, HELP, LIST, MODE, NLST, NOOP,
-	  PASS, PASV, PORT, QUIT, REIN, REST, RETR, RNFR, RNTO, SITE, STAT,
-	  STOR, STRU, TYPE, USER
+      ABOR, ACCT, ALLO, APPE, CWD, DELE, HELP, LIST, MODE, NLST, NOOP,
+      PASS, PASV, PORT, QUIT, REIN, REST, RETR, RNFR, RNTO, SITE, STAT,
+      STOR, STRU, TYPE, USER
 
     """
     user = _ftp_cmd_1_arg(cmd_code="USER", default_value=username.encode('ascii'))
