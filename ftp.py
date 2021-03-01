@@ -1,11 +1,9 @@
 #!/usr/bin/env python
-# Designed for use with boofuzz v0.0.1-dev3
+# Designed for use with boofuzz v0.3.0 branch cli-main
 import re
 
 from boofuzz import *
-from boofuzz.constants import DEFAULT_PROCMON_PORT
-from boofuzz.utils.debugger_thread_simple import DebuggerThreadSimple
-from boofuzz.utils.process_monitor_local import ProcessMonitorLocal
+import boofuzz
 import click
 
 
@@ -45,7 +43,7 @@ def parse_ftp_reply(data):
 
     Note:
     1. Multi-line replies not supported yet
-    
+
     RFC 959 excerpt:
           A reply is defined to contain the 3-digit code, followed by Space
           <SP>, followed by one line of text (where some maximum line length
@@ -61,123 +59,24 @@ def parse_ftp_reply(data):
         raise BooFtpException("Invalid FTP reply, too short; must be a 3-digit sequence followed by a space")
     else:
         try:
-            reply = data[0:reply_code_len+1].decode('ascii')
+            reply = data[0:reply_code_len + 1].decode('ascii')
         except ValueError:
-            raise BooFtpException("Invalid FTP reply, non-ASCII characters; must be a 3-digit sequence followed by a space")
+            raise BooFtpException(
+                "Invalid FTP reply, non-ASCII characters; must be a 3-digit sequence followed by a space")
         if not re.match('[1-5][0-9][0-9] ', reply[0:4]):
             raise BooFtpException("Invalid FTP reply; must be a 3-digit sequence followed by a space")
         else:
             return reply[0:reply_code_len]
 
 
-@click.group()
-def cli():
-    pass
-
-
 @click.command()
-@click.option('--target-host', help='Host or IP address of target', prompt=True)
-@click.option('--target-port', type=int, default=21, help='Network port of target')
 @click.option('--username', help='FTP username', prompt=True)
 @click.option('--password', help='FTP password', prompt=True)
-@click.option('--test-case-index', help='Test case index', type=int)
-@click.option('--test-case-name', help='Name of node or specific test case')
-@click.option('--csv-out', help='Output to CSV file')
-@click.option('--sleep-between-cases', help='Wait time between test cases (floating point)', type=float, default=0)
-@click.option('--procmon-host', help='Process monitor port host or IP')
-@click.option('--procmon-port', type=int, default=DEFAULT_PROCMON_PORT, help='Process monitor port')
-@click.option('--procmon-start', help='Process monitor start command')
-@click.option('--procmon-capture', is_flag=True, help='Capture stdout/stderr from target process upon failure')
-@click.option('--tui/--no-tui', help='Enable/disable TUI')
-@click.option('--text-dump/--no-text-dump', help='Enable/disable full text dump of logs', default=False)
-@click.option('--feature-check', is_flag=True, help='Run a feature check instead of a fuzz test', default=False)
-@click.argument('target_cmdline', nargs=-1, type=click.UNPROCESSED)
-def fuzz(target_cmdline, target_host, target_port, username, password,
-         test_case_index, test_case_name, csv_out, sleep_between_cases,
-         procmon_host, procmon_port, procmon_start, procmon_capture, tui, text_dump, feature_check):
-    local_procmon = None
-    if len(target_cmdline) > 0 and procmon_host is None:
-        local_procmon = ProcessMonitorLocal(crash_filename="boofuzz-crash-bin",
-                                            proc_name=None,  # "proftpd",
-                                            pid_to_ignore=None,
-                                            debugger_class=DebuggerThreadSimple,
-                                            level=1)
+@click.pass_context
+def ftp(ctx, username, password):
+    cli_context = ctx.obj
+    session = cli_context.session
 
-    fuzz_loggers = []
-    if text_dump:
-        fuzz_loggers.append(FuzzLoggerText())
-    elif tui:
-        fuzz_loggers.append(FuzzLoggerCurses())
-    if csv_out is not None:
-        f = open('ftp-fuzz.csv', 'wb')
-        fuzz_loggers.append(FuzzLoggerCsv(file_handle=f))
-
-    procmon_options = {}
-    if procmon_start is not None:
-        procmon_options['start_commands'] = [procmon_start]
-    if target_cmdline is not None:
-        procmon_options['start_commands'] = [list(target_cmdline)]
-    if procmon_capture:
-        procmon_options['capture_output'] = True
-
-    if local_procmon is not None or procmon_host is not None:
-        if procmon_host is not None:
-            procmon = ProcessMonitor(procmon_host, procmon_port)
-        else:
-            procmon = local_procmon
-        procmon.set_options(**procmon_options)
-        monitors = [procmon]
-    else:
-        procmon = None
-        monitors = []
-
-    start = None
-    end = None
-    fuzz_only_one_case = None
-    if test_case_index is None:
-        start = 1
-    elif "-" in test_case_index:
-        start, end = test_case_index.split("-")
-        if not start:
-            start = 1
-        else:
-            start = int(start)
-        if not end:
-            end = None
-        else:
-            end = int(end)
-    else:
-        fuzz_only_one_case = int(test_case_index)
-
-    connection = TCPSocketConnection(target_host, target_port)
-
-    session = Session(
-        target=Target(
-            connection=connection,
-            monitors=monitors,
-        ),
-        fuzz_loggers=fuzz_loggers,
-        sleep_time=sleep_between_cases,
-        index_start=start,
-        index_end=end,
-    )
-
-    initialize_ftp(session, username, password)
-
-    if feature_check:
-        session.feature_check()
-    elif fuzz_only_one_case is not None:
-        session.fuzz_single_case(mutant_index=fuzz_only_one_case)
-    elif test_case_name is not None:
-        session.fuzz_by_name(test_case_name)
-    else:
-        session.fuzz()
-
-    if procmon is not None:
-        procmon.stop_target()
-
-
-def initialize_ftp(session, username, password):
     """
     RFC 5797:
 
@@ -195,6 +94,7 @@ def initialize_ftp(session, username, password):
       STOR, STRU, TYPE, USER
 
     """
+
     user = _ftp_cmd_1_arg(cmd_code="USER", default_value=username.encode('ascii'))
     password = _ftp_cmd_1_arg(cmd_code="PASS", default_value=password.encode('ascii'))
     stor = _ftp_cmd_1_arg(cmd_code="STOR", default_value="AAAA")
@@ -235,7 +135,5 @@ def _ftp_cmd_1_arg(cmd_code, default_value):
     )
 
 
-cli.add_command(fuzz)
-
 if __name__ == "__main__":
-    cli()
+    boofuzz.main_helper(click_command=ftp)
