@@ -27,14 +27,81 @@ def check_reply_code(target, fuzz_data_logger, session, test_case_context, *args
             kwargs: Implementations should include \\*args and \\**kwargs for forward-compatibility.
     """
     if test_case_context.previous_message.name == "__ROOT_NODE__":
-        return
-    else:
-        try:
-            fuzz_data_logger.log_info("Parsing reply contents: {0}".format(session.last_recv))
-            parse_ftp_reply(session.last_recv)
-        except BooFtpException as e:
-            fuzz_data_logger.log_fail(str(e))
-        fuzz_data_logger.log_pass()
+        session.last_recv = target.recv()  # grab FTP hello banner
+    try:
+        fuzz_data_logger.log_info("Parsing reply contents: {0}".format(session.last_recv))
+        r = session.last_recv
+        while True:
+            consumed, reply_code = parse_ftp_stream(r)
+            if consumed == 0:  # no full response yet, ask for more
+                pass
+            elif consumed < len(r):  # got a full message but there is more to read
+                # if reply_code == 220:  # two queued messages is only OK on initial connection
+                r = r[consumed:]  # consume and parse again
+                fuzz_data_logger.log_info("Got reply code {0}, now parsing: {1}".format(reply_code, r))
+                continue
+            else:  # got a full message that consumed the whole queue; done
+                break
+            r2 = target.recv()
+            if len(r2) == 0:
+                raise BooFtpException("No valid reply received in time")
+            r += r2
+    except BooFtpException as e:
+        fuzz_data_logger.log_fail(str(e))
+    fuzz_data_logger.log_pass()
+
+
+def parse_ftp_stream(data):
+    """
+    Parse FTP stream and return reply code or error code. Raise BooFtpException if reply is invalid.
+
+    Note:
+    1. Multi-line replies not supported yet
+
+    RFC 959 excerpt:
+          A reply is defined to contain the 3-digit code, followed by Space
+          <SP>, followed by one line of text (where some maximum line length
+          has been specified), and terminated by the Telnet end-of-line
+          code.  There will be cases however, where the text is longer than
+          a single line...
+
+    Args:
+        data (bytes): Raw reply data
+
+    Returns:
+        tuple: Tuple of two ints -- bytes consumed and the reply code if applicable.
+    """
+    reply_code_len = 3
+    min_reply_len = 6
+    # check first 3 bytes are numbers
+    if len(data) < min_reply_len:
+        return 0, None
+
+    try:
+        reply_code = int(data[0:reply_code_len].decode('ascii'))
+    except ValueError:
+        raise BooFtpException(
+            "Invalid FTP reply, non-ASCII characters; must start with a 3-digit numeric reply code")
+
+    # check if 4th byte is a dash
+    if data[3] == ord(b"-"):
+        raise BooFtpException("Multiline replies not yet supported!")
+    # check if 4th byte is not a space -- error!
+    elif data[3] != ord(b" "):
+        raise BooFtpException(
+            "Invalid FTP reply, fourth character must be a space. Instead it is: {0}".format(data[3]))
+
+    # loop and check for \r\n sequence
+    i = 4
+    consumed = 0
+    while i < len(data):
+        if data[i] == ord(b"\n") and data[i-1] == ord(b"\r"):
+            # return up to that border, with the reply code
+            consumed = i + 1
+            return i + 1, reply_code
+        i += 1
+
+    return 0, None
 
 
 def parse_ftp_reply(data):
