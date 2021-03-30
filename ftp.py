@@ -26,9 +26,9 @@ def check_reply_code(target, fuzz_data_logger, session, test_case_context, *args
             args: Implementations should include \\*args and \\**kwargs for forward-compatibility.
             kwargs: Implementations should include \\*args and \\**kwargs for forward-compatibility.
     """
-    if test_case_context.previous_message.name == "__ROOT_NODE__":
-        session.last_recv = target.recv()  # grab FTP hello banner
     try:
+        if test_case_context.previous_message.name == "__ROOT_NODE__":
+            session.last_recv = target.recv()  # grab FTP hello banner
         fuzz_data_logger.log_info("Parsing reply contents: {0}".format(session.last_recv))
         r = session.last_recv
         while True:
@@ -48,7 +48,8 @@ def check_reply_code(target, fuzz_data_logger, session, test_case_context, *args
             r += r2
     except BooFtpException as e:
         fuzz_data_logger.log_fail(str(e))
-    fuzz_data_logger.log_pass()
+    else:
+        fuzz_data_logger.log_pass()
 
 
 def parse_ftp_stream(data):
