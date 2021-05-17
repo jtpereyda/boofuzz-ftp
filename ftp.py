@@ -43,8 +43,6 @@ def check_reply_code(target, fuzz_data_logger, session, test_case_context, *args
             else:  # got a full message that consumed the whole queue; done
                 break
             r2 = target.recv()
-            if len(r2) == 0:
-                raise BooFtpException("No valid reply received in time")
             r += r2
     except BooFtpException as e:
         fuzz_data_logger.log_fail(str(e))
@@ -74,6 +72,9 @@ def parse_ftp_stream(data):
     """
     reply_code_len = 3
     min_reply_len = 6
+    # check for
+    if len(data) == 0:
+        raise BooFtpException("Connection shutdown unexpectedly")
     # check first 3 bytes are numbers
     if len(data) < min_reply_len:
         return 0, None
